@@ -2,18 +2,22 @@ from flask import Flask, request, jsonify # type: ignore
 import pandas as pd # type: ignore
 from prophet import Prophet # type: ignore
 from flask_cors import CORS # type: ignore
+from sklearn.cluster import KMeans # type: ignore
+from sklearn.metrics import silhouette_score # type: ignore
+import numpy as np # type: ignore
 
 app = Flask(__name__)
 CORS(app) 
 
-# Load the dataset
 df = pd.read_csv("backend/data.csv")
 df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
 df = df.set_index('Date', drop=True)
 df_inventory=df.copy()
 df_inventory['Inventory Level'] = df_inventory['EWMA']*1.5
 
-# Label mappings for encoding
+category_sales = df.groupby(['Category', 'Store ID'])['EWMA'].sum().reset_index()
+
+
 label_mappings = {
     "Store ID": {
         "S001": 0, "S002": 1, "S003": 2, "S004": 3, "S005": 4
@@ -68,26 +72,63 @@ def forecast_sales():
 
         forecast_filtered = forecast[(forecast["ds"] >= start_date) & (forecast["ds"] <= end_date)]
         actual_filtered = df_prophet[(df_prophet["ds"] >= start_date) & (df_prophet["ds"] <= end_date)]
-        df_inventory_filtered = df_inventory_filtered[(df_inventory_filtered["Date"] >= start_date) & 
-                                                        (df_inventory_filtered["Date"] <= end_date)]
 
-        actual_sales = [{"date": row["ds"].strftime("%Y-%m-%d"), "actual": row["y"]} for _, row in actual_filtered.iterrows()]
+        actual_sales = [
+            {"date": row["ds"].strftime("%Y-%m-%d"), 
+            "actual": row["y"]} 
+            for _, row in actual_filtered.iterrows()
+        ]
+
         predicted_sales = [
-            {"date": row["ds"].strftime("%Y-%m-%d"), "predicted": row["yhat"], "lower_bound": row["yhat_lower"], "upper_bound": row["yhat_upper"]}
+            {"date": row["ds"].strftime("%Y-%m-%d"), 
+            "predicted": row["yhat"], 
+            "lower_bound": row["yhat_lower"], 
+            "upper_bound": row["yhat_upper"]}
             for _, row in forecast_filtered.iterrows()
         ]
-        # inventory_level = [{"date": row["Date"].strftime("%Y-%m-%d"), "inventory_level": row["Inventory Level"]} for _, row in df_inventory_filtered.iterrows()]
+        
 
         return jsonify({
             "store_id": store_id,
             "product_name": product_name,
             "actual_sales": actual_sales,
             "predicted_sales": predicted_sales
-            # "inventory_level": inventory_level
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
+@app.route('/clustering', methods=['GET'])
+def clustering():
+    try:
+        X = category_sales[['EWMA']].values        
+
+        inertia = []
+        for k in range(1, 6):
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            kmeans.fit(X)
+            inertia.append(kmeans.inertia_)
+
+        optimal_k = np.diff(inertia).argmin() + 2
+
+        kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
+        category_sales['Cluster'] = kmeans.fit_predict(X)
+
+        cluster_data = []
+        for _, row in category_sales.iterrows():
+            cluster_data.append({
+                "category": row['Category'],
+                "store_id": int(row['Store ID']),
+                "sales": row['EWMA'],
+                "cluster": int(row['Cluster'])
+            })
+
+        return jsonify({"clusters": cluster_data})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
