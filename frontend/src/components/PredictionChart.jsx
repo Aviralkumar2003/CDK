@@ -101,7 +101,7 @@ export default function PredictionChart() {
   
 
   const prepareChartData = () => {
-    if (!forecastData || !forecastData.predicted_sales) return null;
+    if (!forecastData || !forecastData.predicted_sales || product === "None") return null;
 
     const allDates = forecastData.predicted_sales.map(item => item.date);
     const filteredDates = filterDates(allDates, selectedInterval);
@@ -214,15 +214,15 @@ export default function PredictionChart() {
   };
 
   const calculateFutureUnits = () => {
-    if (!forecastData || !forecastData.predicted_sales) return null;
+    if (!forecastData || !forecastData.predicted_sales || product === "None") return null;
     const today = new Date("2024-01-01");
     if (new Date(endDate) <= today) return null;
 
-    const futureSales = forecastData.predicted_sales.filter(item => new Date(item.date) >= today);
+    const futureSales = forecastData.predicted_sales.filter(item => new Date(item.date) >= today && new Date(item.date) <= new Date(endDate));
     if (futureSales.length === 0) return null;
 
-    var minRequiredUnits = Math.min(...futureSales.map(item => item.lower_bound));
-    var maxRequiredUnits = Math.max(...futureSales.map(item => item.upper_bound));
+    var minRequiredUnits = futureSales.reduce((sum, item) => sum + item.lower_bound, 0);
+    var maxRequiredUnits = futureSales.reduce((sum, item) => sum + item.upper_bound, 0);    
 
     minRequiredUnits += minRequiredUnits * 0.1;
     maxRequiredUnits += maxRequiredUnits * 0.1;
@@ -237,7 +237,7 @@ export default function PredictionChart() {
 
 
   return (
-    <div className="m-4 p-6 rounded-xl bg-white shadow-md border border-gray-200 flex flex-col lg:flex-row gap-8">
+    <div className="m-4 p-6 rounded-xl bg-white shadow-md border border-gray-200 flex flex-col gap-8">
       <div className="flex-1 space-y-4">
         <div className="flex items-center space-x-3">
           <label htmlFor="interval" className="text-lg font-semibold">Interval:</label>
@@ -283,33 +283,37 @@ export default function PredictionChart() {
           </div>
         </div>
 
+        { product!="None" && forecastData && prepareChartData() &&(
+          <div className="flex-1 p-6 rounded-lg shadow-md bg-gradient-to-r from-[#4CAF50] to-[#31837A] text-white space-y-4">
+          <h2 className="text-2xl font-bold flex justify-center">Forecast Summary</h2>
+
+          <div className="flex justify-center space-x-100">
+            <div>
+              <div><p className="font-semibold">Product: {product}</p></div>
+              <div><p className="font-semibold">Store Location: {store}</p></div>
+              <div><p className="font-semibold">Start Date: {startDate}</p></div>
+              <div><p className="font-semibold">End Date: {endDate}</p></div>
+            </div>
+            <div>
+              <div><p className="font-semibold">Forecast Interval: {selectedInterval}</p></div>
+              <div>
+                <p className="font-semibold">Min Required Units: {futureUnits ? Math.round(futureUnits.minRequiredUnits) : "N/A"} units</p>
+              </div>
+              <div>
+                <p className="font-semibold">Max Required Units: {futureUnits ? Math.round(futureUnits.maxRequiredUnits) : "N/A"} units</p>
+              </div>
+            </div>
+          </div>
+          </div>
+        )}
+
         {forecastData && prepareChartData() && (
           <Line
-            className="w-full h-[350px] animate-fadeIn"
+            className="min-w-[1080px] max-h-[500px] animate-fadeIn"
             data={prepareChartData()}
             options={chartOptions}
           />
         )}
-      </div>
-
-      <div className="flex-1 p-6 rounded-lg shadow-md bg-gradient-to-r from-[#4CAF50] to-[#31837A] text-white space-y-4">
-        <h2 className="text-2xl font-bold">Forecast Summary</h2>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div><p className="font-semibold">Product:</p> <p>{product}</p></div>
-          <div><p className="font-semibold">Store Location:</p> <p>{store}</p></div>
-          <div><p className="font-semibold">Start Date:</p> <p>{startDate}</p></div>
-          <div><p className="font-semibold">End Date:</p> <p>{endDate}</p></div>
-          <div><p className="font-semibold">Forecast Interval:</p> <p>{selectedInterval}</p></div>
-          <div>
-            <p className="font-semibold">Min Required Units:</p>
-            <p>{futureUnits ? Math.round(futureUnits.minRequiredUnits) : "N/A"} units</p>
-          </div>
-          <div>
-            <p className="font-semibold">Max Required Units:</p>
-            <p>{futureUnits ? Math.round(futureUnits.maxRequiredUnits) : "N/A"} units</p>
-          </div>
-        </div>
       </div>
     </div>
   );

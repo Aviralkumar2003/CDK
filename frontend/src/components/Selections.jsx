@@ -39,7 +39,7 @@ export default function Selections() {
           onChange={handleProductChange}
           className="bg-gray-100 rounded px-2 py-1 cursor-pointer text-black"
         >
-          <option value="">Select Product</option>
+          <option value="">Select Spare Part</option>
           {productOptions.map((item) => (
             <option key={item} value={item}>{item}</option>
           ))}
